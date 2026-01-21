@@ -10,5 +10,8 @@
   "license": "ISC",
   "devDependencies": {
     "esbuild": "0.27.2"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.4"
   }
 }
