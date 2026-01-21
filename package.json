@@ -1,0 +1,14 @@
+{
+  "name": "cad-playground",
+  "version": "1.0.0",
+  "description": "cad-playground",
+  "main": "main.js",
+  "scripts": {
+    "dev": "esbuild src/main.js --outdir=public --bundle --watch --servedir=public"
+  },
+  "author": "moll-y",
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "0.27.2"
+  }
+}
