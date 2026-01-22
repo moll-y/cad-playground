@@ -15,14 +15,19 @@ if (!gl) {
 const vshader = gl.createShader(gl.VERTEX_SHADER);
 gl.shaderSource(
   vshader,
-  `#version 300 es                          \n
-                                            \n
-  layout (location = 0) in vec4 position;   \n
-                                            \n
-  uniform mat4 transform;                   \n
-                                            \n
-  void main(void) {                         \n
-      gl_Position = transform * position;   \n
+  `#version 300 es                                       \n
+                                                         \n
+  layout (location = 0) in vec4 position;                \n
+  layout (location = 1) in vec4 color;                   \n
+                                                         \n
+  uniform mat4 model;                                    \n
+  uniform mat4 projection;                               \n
+                                                         \n
+  out vec4 in_color;                                     \n
+                                                         \n
+  void main(void) {                                      \n
+      gl_Position = projection * model * position;       \n
+      in_color = color;                                  \n
   }`,
 );
 
@@ -34,14 +39,15 @@ if (!gl.getShaderParameter(vshader, gl.COMPILE_STATUS)) {
 const fshader = gl.createShader(gl.FRAGMENT_SHADER);
 gl.shaderSource(
   fshader,
-  `#version 300 es                          \n
-                                            \n
-  precision highp float;                    \n
-                                            \n
-  out vec4 color;                           \n
-                                            \n
-  void main(void) {                         \n
-      color = vec4(1.0, 0.0, 0.0, 1.0);     \n
+  `#version 300 es                                       \n
+                                                         \n
+  precision highp float;                                 \n
+                                                         \n
+  in vec4 in_color;                                      \n
+  out vec4 color;                                        \n
+                                                         \n
+  void main(void) {                                      \n
+      color = in_color;                                  \n
   }`,
 );
 
@@ -61,22 +67,42 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 gl.deleteShader(vshader);
 gl.deleteShader(fshader);
 
-const uniform = gl.getUniformLocation(program, "transform");
-if (uniform === null) {
-  throw new Error(`could not find uniform location: "transform".`);
+const uniformModel = gl.getUniformLocation(program, "model");
+if (uniformModel === null) {
+  throw new Error(`could not find uniform location: "model".`);
 }
 
+const uniformProjection = gl.getUniformLocation(program, "projection");
+if (uniformProjection === null) {
+  throw new Error(`could not find uniform location: "projection".`);
+}
+
+const vao = gl.createVertexArray();
+const ebo = gl.createBuffer();
 const vbo = gl.createBuffer();
+const cbo = gl.createBuffer();
+
+gl.bindVertexArray(vao);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+
 gl.bufferData(
   gl.ARRAY_BUFFER,
   new Float32Array([
-    ...[-0.15, -0.15, 0, 1],
-    ...[0.15, -0.15, 0, 1],
-    ...[0, 0.15, 0, 1],
+    ...[-0.1, 0.0, 0, 1],
+    ...[-0.0, 0.2, 0, 1],
+    ...[+0.1, 0.0, 0, 1],
   ]),
   gl.STATIC_DRAW,
 );
+
+gl.bufferData(
+  gl.ELEMENT_ARRAY_BUFFER,
+  new Uint32Array([0, 1, 2, 0, 1, 2]),
+  gl.STATIC_DRAW,
+);
+
+// position = 0
 gl.vertexAttribPointer(
   0,
   4,
@@ -89,38 +115,85 @@ gl.enableVertexAttribArray(0);
 
 const zero = document.timeline.currentTime;
 
+gl.useProgram(program);
+gl.bindVertexArray(vao);
+gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
+
+// position = 1
+gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
+gl.enableVertexAttribArray(1);
+
 function render(timestamp) {
   const elapsed = timestamp - zero;
 
-  const rotation = mat4.create();
-  mat4.rotate(
-    rotation,
+  const rotate = mat4.rotate(
     mat4.create(),
-    glMatrix.toRadian(0.1 * elapsed),
+    mat4.create(),
+    0, // glMatrix.toRadian(0.1 * elapsed),
     [0, 1, 0],
   );
 
-  const z = 1 - ((0.0001 * elapsed) % 1);
-  const translation = mat4.create();
-  mat4.translate(translation, mat4.create(), [0, 0, z]);
+  // Enable depth testing
+  gl.enable(gl.DEPTH_TEST);
+  // Near things obscure far things
+  gl.depthFunc(gl.LEQUAL);
+  // Clear the canvas before we start drawing on it.
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  const projection = mat4.fromValues(
+  const za = (0.0001 * elapsed) % 2;
+  const pa = mat4.fromValues(
     ...[1, 0, 0, 0],
     ...[0, 1, 0, 0],
-    ...[0, 0, 1, z],
-    ...[0, 0, 0, z],
+    ...[0, 0, 1, za],
+    ...[0, 0, 0, za],
+  );
+  gl.uniformMatrix4fv(uniformProjection, false, pa);
+
+  const ta = mat4.translate(mat4.create(), mat4.create(), [-0.05, 0, za]);
+  const ma = mat4.mul(mat4.create(), ta, rotate);
+  gl.uniformMatrix4fv(uniformModel, false, ma);
+
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      ...[1.0, 0.0, 0.0, 1.0],
+      ...[1.0, 0.0, 0.0, 1.0],
+      ...[1.0, 0.0, 0.0, 1.0],
+    ]),
+    gl.STATIC_DRAW,
   );
 
-  const mul = mat4.create();
-  mat4.mul(mul, translation, rotation);
-  mat4.mul(mul, projection, mul);
+  gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_INT, 0);
 
-  gl.clearColor(0, 0, 0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  const zb = (0.0002 * elapsed) % 2;
+  const pb = mat4.fromValues(
+    ...[1, 0, 0, 0],
+    ...[0, 1, 0, 0],
+    ...[0, 0, 1, zb],
+    ...[0, 0, 0, zb],
+  );
+  gl.uniformMatrix4fv(uniformProjection, false, pb);
 
-  gl.useProgram(program);
-  gl.uniformMatrix4fv(uniform, false, mul);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const tb = mat4.translate(mat4.create(), mat4.create(), [+0.05, 0, zb]);
+  const mb = mat4.mul(mat4.create(), tb, rotate);
+  gl.uniformMatrix4fv(uniformModel, false, mb);
+
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      ...[0.0, 1.0, 0.0, 1.0],
+      ...[0.0, 1.0, 0.0, 1.0],
+      ...[0.0, 1.0, 0.0, 1.0],
+    ]),
+    gl.STATIC_DRAW,
+  );
+
+  gl.drawElements(
+    gl.TRIANGLES,
+    3,
+    gl.UNSIGNED_INT,
+    3 * Uint32Array.BYTES_PER_ELEMENT,
+  );
 
   requestAnimationFrame(render);
 }
