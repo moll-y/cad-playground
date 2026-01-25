@@ -125,6 +125,9 @@ gl.enableVertexAttribArray(1);
 
 function render(timestamp) {
   const elapsed = timestamp - zero;
+  const a = (elapsed * 0.0003) % 2;
+  const b = (elapsed * 0.0007) % 2;
+  const g = 5;
 
   const rotate = mat4.rotate(
     mat4.create(),
@@ -140,18 +143,26 @@ function render(timestamp) {
   // Clear the canvas before we start drawing on it.
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  const za = (0.0001 * elapsed) % 2;
-  const pa = mat4.fromValues(
-    ...[1, 0, 0, 0],
-    ...[0, 1, 0, 0],
-    ...[0, 0, 1, za],
-    ...[0, 0, 0, za],
+  gl.uniformMatrix4fv(
+    uniformModel,
+    false,
+    mat4.mul(
+      mat4.create(),
+      // a - 1 maps z coordinate from [0, 2) to [-1, 1).
+      mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, a - 1]),
+      rotate,
+    ),
   );
-  gl.uniformMatrix4fv(uniformProjection, false, pa);
-
-  const ta = mat4.translate(mat4.create(), mat4.create(), [-0.05, 0, za]);
-  const ma = mat4.mul(mat4.create(), ta, rotate);
-  gl.uniformMatrix4fv(uniformModel, false, ma);
+  gl.uniformMatrix4fv(
+    uniformProjection,
+    false,
+    mat4.fromValues(
+      ...[1, 0, 0, 0],
+      ...[0, 1, 0, 0],
+      ...[0, 0, a * g, 0],
+      ...[0, 0, 0, a * g],
+    ),
+  );
 
   gl.bufferData(
     gl.ARRAY_BUFFER,
@@ -165,18 +176,27 @@ function render(timestamp) {
 
   gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_INT, 0);
 
-  const zb = (0.0002 * elapsed) % 2;
-  const pb = mat4.fromValues(
-    ...[1, 0, 0, 0],
-    ...[0, 1, 0, 0],
-    ...[0, 0, 1, zb],
-    ...[0, 0, 0, zb],
+  gl.uniformMatrix4fv(
+    uniformModel,
+    false,
+    mat4.mul(
+      mat4.create(),
+      // b - 1 maps z coordinate from [0, 2) to [-1, 1).
+      mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, b - 1]),
+      rotate,
+    ),
   );
-  gl.uniformMatrix4fv(uniformProjection, false, pb);
 
-  const tb = mat4.translate(mat4.create(), mat4.create(), [+0.05, 0, zb]);
-  const mb = mat4.mul(mat4.create(), tb, rotate);
-  gl.uniformMatrix4fv(uniformModel, false, mb);
+  gl.uniformMatrix4fv(
+    uniformProjection,
+    false,
+    mat4.fromValues(
+      ...[1, 0, 0, 0],
+      ...[0, 1, 0, 0],
+      ...[0, 0, b * g, 0],
+      ...[0, 0, 0, b * g],
+    ),
+  );
 
   gl.bufferData(
     gl.ARRAY_BUFFER,
