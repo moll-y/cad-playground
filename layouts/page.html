@@ -1,0 +1,19 @@
+{{ define "main" }}
+  <div>
+    <h1>{{ .Parent.Title }}</h1>
+    <h2>{{ .Title }}</h2>
+    <a href="{{ "/" | relURL }}">Back</a>
+  </div>
+  <div>
+    <h3>Simulation</h3>
+    <canvas id="canvas" width="500" height="500">CAD Playground</canvas>
+  </div>
+  {{ .Content }}
+{{ end }}
+{{ define "scripts" }}
+  {{ $id := path.Base (path.Dir .File.Path) }}
+  {{ $built := resources.Get (printf "%s/index.js" $id) | js.Build (dict "targetPath"
+    (printf "js/%s.js" $id))
+  }}
+  <script src="{{ $built.RelPermalink }}" defer></script>
+{{ end }}

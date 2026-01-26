@@ -1,6 +1,4 @@
-import { mat4, glMatrix } from "gl-matrix";
-
-new EventSource("/esbuild").addEventListener("change", () => location.reload());
+import { mat4 } from "gl-matrix";
 
 const canvas = document.getElementById("canvas");
 if (!canvas) {
@@ -126,15 +124,10 @@ gl.enableVertexAttribArray(1);
 function render(timestamp) {
   const elapsed = timestamp - zero;
   const a = (elapsed * 0.0003) % 2;
-  const b = (elapsed * 0.0007) % 2;
-  const g = 5;
+  const b = (elapsed * 0.0025) % 2;
+  const g = 4;
 
-  const rotate = mat4.rotate(
-    mat4.create(),
-    mat4.create(),
-    0, // glMatrix.toRadian(0.1 * elapsed),
-    [0, 1, 0],
-  );
+  const rotate = mat4.rotate(mat4.create(), mat4.create(), 0, [0, 1, 0]);
 
   // Enable depth testing
   gl.enable(gl.DEPTH_TEST);
@@ -148,6 +141,7 @@ function render(timestamp) {
     false,
     mat4.mul(
       mat4.create(),
+      // From camera-space to clip-space.
       // a - 1 maps z coordinate from [0, 2) to [-1, 1).
       mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, a - 1]),
       rotate,
@@ -156,6 +150,7 @@ function render(timestamp) {
   gl.uniformMatrix4fv(
     uniformProjection,
     false,
+    // From camera-space to clip-space.
     mat4.fromValues(
       ...[1, 0, 0, 0],
       ...[0, 1, 0, 0],
@@ -181,6 +176,7 @@ function render(timestamp) {
     false,
     mat4.mul(
       mat4.create(),
+      // From camera-space to clip-space.
       // b - 1 maps z coordinate from [0, 2) to [-1, 1).
       mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, b - 1]),
       rotate,
@@ -190,6 +186,7 @@ function render(timestamp) {
   gl.uniformMatrix4fv(
     uniformProjection,
     false,
+    // From camera-space to clip-space.
     mat4.fromValues(
       ...[1, 0, 0, 0],
       ...[0, 1, 0, 0],
@@ -201,9 +198,9 @@ function render(timestamp) {
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([
-      ...[0.0, 1.0, 0.0, 1.0],
-      ...[0.0, 1.0, 0.0, 1.0],
-      ...[0.0, 1.0, 0.0, 1.0],
+      ...[0.0, 0.0, 0.0, 1.0],
+      ...[0.0, 0.0, 0.0, 1.0],
+      ...[0.0, 0.0, 0.0, 1.0],
     ]),
     gl.STATIC_DRAW,
   );

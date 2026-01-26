@@ -1,17 +1,18 @@
 {
   "name": "cad-playground",
-  "version": "1.0.0",
-  "description": "cad-playground",
-  "main": "main.js",
+  "version": "0.1.0",
   "scripts": {
-    "dev": "esbuild src/main.js --outdir=public --bundle --watch --servedir=public"
+    "format": "prettier . --write"
   },
-  "author": "moll-y",
-  "license": "ISC",
-  "devDependencies": {
-    "esbuild": "0.27.2"
+  "comments": {
+    "dependencies": {},
+    "devDependencies": {}
   },
   "dependencies": {
     "gl-matrix": "^3.4.4"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "prettier-plugin-go-template": "^0.0.15"
   }
 }
