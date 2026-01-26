@@ -35,6 +35,5 @@ z
 \end{aligned}
 \]
 
-This way, after the perspective divide, the result (in clip-space) becomes
-\((x/z, y/z, z)\), preserving depth and allowing `DEPTH_TEST` to behave as
-intended.
+This way, after the perspective divide, the result becomes \((x/z, y/z, z)\),
+preserving depth and allowing `DEPTH_TEST` to behave as intended.
