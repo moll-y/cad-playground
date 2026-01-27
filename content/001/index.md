@@ -4,36 +4,48 @@ title = '001: Simple Projection with perspective'
 
 ### Notes
 
-Previously, the \(w\) component was set equal to \(z\), producing homogeneous
-coordinates \((x, y, z, z)\). After the perspective divide, this resulted in
-\((x/z, y/z, z/z = 1)\). Forcing the depth (\(z\)) to always be \(1\), and
-making `DEPTH_TEST` to not behave as expected. To fix this issue, the following
-projection matrix is used to produce homogeneous coordinates \((x, y, z^2,
-z)\):
+Given an input point \((x,y,z)\) in world space, we map it to camera space as:
+
+\[
+\begin{aligned}
+x*{\text{camera}} &= x, \\
+y*{\text{camera}} &= y, \\
+z\_{\text{camera}} &= z \operatorname{mod} 2,
+\end{aligned}
+\]
+
+which wraps the depth coordinate with period 2. The result is then multiplied
+by the projection matrix:
 
 \[
 \begin{aligned}
 \begin{bmatrix}
-1 & 0 & 0 & 0 \\
-0 & 1 & 0 & 0 \\
-0 & 0 & z & 0 \\
-0 & 0 & 0 & z
+g & 0 & 0 & 0 \\
+0 & g & 0 & 0 \\
+0 & 0 & g & -1 \\
+0 & 0 & 1 & 0
 \end{bmatrix}
 \begin{bmatrix}
-x \\
-y \\
-z \\
+x*{\text{camera}} \\
+y*{\text{camera}} \\
+z*{\text{camera}} \\
 1
 \end{bmatrix}
 &=
 \begin{bmatrix}
-x \\
-y \\
-z^2 \\
-z
+g\,x*{\text{camera}} \\
+g\,y*{\text{camera}} \\
+g\,z*{\text{camera}} - 1 \\
+z\_{\text{camera}}
 \end{bmatrix}
 \end{aligned}
 \]
 
-This way, after the perspective divide, the result becomes \((x/z, y/z, z)\),
-preserving depth and allowing `DEPTH_TEST` to behave as intended.
+Here, \((g)\) is called `focal length` of the camera. A short focal length
+corresponds to a wide field of view, and a long focal length corresponds to a
+narrow field of view. By increasing or decreasing the distance \((g)\), the
+camera can be made to zoom in and zoom out, respectively.
+
+### Resources
+
+- [WebGL model view projection](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_model_view_projection#divide_by_w)

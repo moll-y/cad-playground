@@ -1,5 +1,3 @@
-import { mat4 } from "gl-matrix";
-
 const canvas = document.getElementById("canvas");
 if (!canvas) {
   throw new Error("canvas is not defined.");
@@ -13,19 +11,16 @@ if (!gl) {
 const vshader = gl.createShader(gl.VERTEX_SHADER);
 gl.shaderSource(
   vshader,
-  `#version 300 es                                       \n
-                                                         \n
-  layout (location = 0) in vec4 position;                \n
-  layout (location = 1) in vec4 color;                   \n
-                                                         \n
-  uniform mat4 model;                                    \n
-  uniform mat4 projection;                               \n
-                                                         \n
-  out vec4 in_color;                                     \n
-                                                         \n
-  void main(void) {                                      \n
-      gl_Position = projection * model * position;       \n
-      in_color = color;                                  \n
+  `#version 300 es                        \n
+                                          \n
+  layout (location = 0) in vec4 position; \n
+  layout (location = 1) in vec4 color;    \n
+                                          \n
+  out vec4 in_color;                      \n
+                                          \n
+  void main(void) {                       \n
+      gl_Position = position;             \n
+      in_color = color;                   \n
   }`,
 );
 
@@ -37,15 +32,15 @@ if (!gl.getShaderParameter(vshader, gl.COMPILE_STATUS)) {
 const fshader = gl.createShader(gl.FRAGMENT_SHADER);
 gl.shaderSource(
   fshader,
-  `#version 300 es                                       \n
-                                                         \n
-  precision highp float;                                 \n
-                                                         \n
-  in vec4 in_color;                                      \n
-  out vec4 color;                                        \n
-                                                         \n
-  void main(void) {                                      \n
-      color = in_color;                                  \n
+  `#version 300 es                        \n
+                                          \n
+  precision highp float;                  \n
+                                          \n
+  in vec4 in_color;                       \n
+  out vec4 color;                         \n
+                                          \n
+  void main(void) {                       \n
+      color = in_color;                   \n
   }`,
 );
 
@@ -65,41 +60,22 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 gl.deleteShader(vshader);
 gl.deleteShader(fshader);
 
-const uniformModel = gl.getUniformLocation(program, "model");
-if (uniformModel === null) {
-  throw new Error(`could not find uniform location: "model".`);
-}
-
-const uniformProjection = gl.getUniformLocation(program, "projection");
-if (uniformProjection === null) {
-  throw new Error(`could not find uniform location: "projection".`);
-}
-
+// Vertex array object.
 const vao = gl.createVertexArray();
-const ebo = gl.createBuffer();
-const vbo = gl.createBuffer();
-const cbo = gl.createBuffer();
-
 gl.bindVertexArray(vao);
+
+// Element buffer object.
+const ebo = gl.createBuffer();
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-
-gl.bufferData(
-  gl.ARRAY_BUFFER,
-  new Float32Array([
-    ...[-0.1, 0.0, 0, 1],
-    ...[-0.0, 0.2, 0, 1],
-    ...[+0.1, 0.0, 0, 1],
-  ]),
-  gl.STATIC_DRAW,
-);
-
 gl.bufferData(
   gl.ELEMENT_ARRAY_BUFFER,
   new Uint32Array([0, 1, 2, 0, 1, 2]),
   gl.STATIC_DRAW,
 );
 
+// Vertex buffer object.
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 // position = 0
 gl.vertexAttribPointer(
   0,
@@ -111,23 +87,38 @@ gl.vertexAttribPointer(
 );
 gl.enableVertexAttribArray(0);
 
-const zero = document.timeline.currentTime;
-
-gl.useProgram(program);
-gl.bindVertexArray(vao);
+// Color buffer object.
+const cbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
-
 // position = 1
 gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
 gl.enableVertexAttribArray(1);
 
+function camera({ x, y, z }) {
+  return { x, y, z: z % 2 };
+}
+
+function project({ x, y, z }) {
+  // Focal length of the camera.
+  const g = 0.1;
+  // The return is the result of performing the following matrix
+  // multiplication:
+  //  +--      --+ +- -+
+  //  | g 0 0  0 | | x |
+  //  | 0 g 0  0 | | y |
+  //  | 0 0 g -1 | | z |
+  //  | 0 0 1  0 | | 1 |
+  //  +--      --+ +- -+
+  return [x * g, y * g, (z - 1) * g, z];
+}
+
+const zero = document.timeline.currentTime;
+
+gl.useProgram(program);
+gl.bindVertexArray(vao);
+
 function render(timestamp) {
   const elapsed = timestamp - zero;
-  const a = (elapsed * 0.0003) % 2;
-  const b = (elapsed * 0.0025) % 2;
-  const g = 4;
-
-  const rotate = mat4.rotate(mat4.create(), mat4.create(), 0, [0, 1, 0]);
 
   // Enable depth testing
   gl.enable(gl.DEPTH_TEST);
@@ -136,29 +127,18 @@ function render(timestamp) {
   // Clear the canvas before we start drawing on it.
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  gl.uniformMatrix4fv(
-    uniformModel,
-    false,
-    mat4.mul(
-      mat4.create(),
-      // From camera-space to clip-space.
-      // a - 1 maps z coordinate from [0, 2) to [-1, 1).
-      mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, a - 1]),
-      rotate,
-    ),
+  // First triangle.
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      ...project(camera({ x: 0.8, y: 0.0, z: elapsed * 0.0001 })),
+      ...project(camera({ x: 0.9, y: 0.2, z: elapsed * 0.0001 })),
+      ...project(camera({ x: 1.0, y: 0.0, z: elapsed * 0.0001 })),
+    ]),
+    gl.STATIC_DRAW,
   );
-  gl.uniformMatrix4fv(
-    uniformProjection,
-    false,
-    // From camera-space to clip-space.
-    mat4.fromValues(
-      ...[1, 0, 0, 0],
-      ...[0, 1, 0, 0],
-      ...[0, 0, a * g, 0],
-      ...[0, 0, 0, a * g],
-    ),
-  );
-
+  gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([
@@ -168,33 +148,20 @@ function render(timestamp) {
     ]),
     gl.STATIC_DRAW,
   );
-
   gl.drawElements(gl.TRIANGLES, 3, gl.UNSIGNED_INT, 0);
 
-  gl.uniformMatrix4fv(
-    uniformModel,
-    false,
-    mat4.mul(
-      mat4.create(),
-      // From camera-space to clip-space.
-      // b - 1 maps z coordinate from [0, 2) to [-1, 1).
-      mat4.translate(mat4.create(), mat4.create(), [-0.5, 0, b - 1]),
-      rotate,
-    ),
+  // Second triangle.
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([
+      ...project(camera({ x: 0.8, y: 0.0, z: elapsed * 0.0009 })),
+      ...project(camera({ x: 0.9, y: 0.2, z: elapsed * 0.0009 })),
+      ...project(camera({ x: 1.0, y: 0.0, z: elapsed * 0.0009 })),
+    ]),
+    gl.STATIC_DRAW,
   );
-
-  gl.uniformMatrix4fv(
-    uniformProjection,
-    false,
-    // From camera-space to clip-space.
-    mat4.fromValues(
-      ...[1, 0, 0, 0],
-      ...[0, 1, 0, 0],
-      ...[0, 0, b * g, 0],
-      ...[0, 0, 0, b * g],
-    ),
-  );
-
+  gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([
@@ -204,7 +171,6 @@ function render(timestamp) {
     ]),
     gl.STATIC_DRAW,
   );
-
   gl.drawElements(
     gl.TRIANGLES,
     3,
