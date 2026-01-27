@@ -1,11 +1,8 @@
 {{ define "main" }}
+  <h1><a href="{{ "/" | relURL }}">{{ .Parent.Title }}</a></h1>
+  <h2>{{ .Title }}</h2>
+  <h3>Simulation</h3>
   <div>
-    <h1>{{ .Parent.Title }}</h1>
-    <h2>{{ .Title }}</h2>
-    <a href="{{ "/" | relURL }}">Back</a>
-  </div>
-  <div>
-    <h3>Simulation</h3>
     <canvas id="canvas" width="500" height="500">CAD Playground</canvas>
   </div>
   {{ .Content }}

@@ -1,3 +1,50 @@
+h1,
+h2,
+h3,
+p {
+  font-family: "Lucida Console", "Courier New", monospace;
+  text-align: justify;
+  margin: 0;
+}
+
+h2,
+h3 {
+  font-size: 16px;
+}
+
+h1 {
+  font-size: 18px;
+  padding: 1rem 0;
+}
+
+h3 {
+  padding: 1rem 0;
+}
+
+p {
+  font-size: 12px;
+}
+
+body {
+  width: 100vw;
+  margin: 0;
+}
+
+main {
+  width: 50%;
+  margin: auto;
+}
+
+ul {
+  margin: 0;
+}
+
 canvas {
   border: 1px solid black;
+}
+
+div:has(> canvas) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }

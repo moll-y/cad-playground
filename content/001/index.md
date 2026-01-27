@@ -1,5 +1,5 @@
 +++
-title = '001: Simple Projection with perspective'
+title = '001 - Simple projection with perspective'
 +++
 
 ### Notes
