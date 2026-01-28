@@ -1,28 +1,34 @@
 +++
-title = '001 - Simple projection with perspective'
+title = '001 - Infinite projection'
 +++
+
+### Goal
+
+Understand projections.
 
 ### Notes
 
-Given an input point \((x,y,z)\) in world space, we map it to camera space as:
+Given an input point \((𝑥*{\text{world}},𝑦*{\text{world}},𝑧\_{\text{world}})\)
+in world space, where \(𝑥∈[−1,1]\), \(𝑦∈[−1,1]\), and \(z∈[−1,1]\), we map it
+to camera space as follows:
 
 \[
 \begin{aligned}
-x*{\text{camera}} &= x, \\
-y*{\text{camera}} &= y, \\
-z\_{\text{camera}} &= z \operatorname{mod} 2,
+x*{\text{camera}} &= x*{\text{world}} \\
+y*{\text{camera}} &= y*{\text{world}} \\
+z*{\text{camera}} &= z*{\text{world}} + 1
 \end{aligned}
 \]
 
-which wraps the depth coordinate with period 2. The result is then multiplied
-by the projection matrix:
+The result is then multiplied by the infinite projection matrix with \(n=0.1\)
+(near plane), \(s=1.0\) (spect ratio), and \(g=0.1\) (focal length):
 
 \[
 \begin{aligned}
 \begin{bmatrix}
-g & 0 & 0 & 0 \\
+\frac{g}{s} & 0 & 0 & 0 \\
 0 & g & 0 & 0 \\
-0 & 0 & g & -1 \\
+0 & 0 & 1 & -n \\
 0 & 0 & 1 & 0
 \end{bmatrix}
 \begin{bmatrix}
@@ -33,18 +39,19 @@ z*{\text{camera}} \\
 \end{bmatrix}
 &=
 \begin{bmatrix}
-g\,x*{\text{camera}} \\
-g\,y*{\text{camera}} \\
-g\,z*{\text{camera}} - 1 \\
+\frac{g}{s} \times x*{\text{camera}} \\
+g \times y*{\text{camera}} \\
+z*{\text{camera}} - n \\
 z\_{\text{camera}}
 \end{bmatrix}
 \end{aligned}
 \]
 
-Here, \((g)\) is called `focal length` of the camera. A short focal length
-corresponds to a wide field of view, and a long focal length corresponds to a
-narrow field of view. By increasing or decreasing the distance \((g)\), the
-camera can be made to zoom in and zoom out, respectively.
+A short focal length corresponds to a wide field of view, and a long focal
+length corresponds to a narrow field of view. By increasing or decreasing the
+distance \(g\), the camera can be made to zoom in and zoom out, respectively.
+The previous transformation produces coordinates in clip space
+\((𝑥*{\text{clip}},𝑦*{\text{clip}},𝑧\_{\text{clip}})\).
 
 ### Resources
 

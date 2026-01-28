@@ -95,21 +95,16 @@ gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 0, 0);
 gl.enableVertexAttribArray(1);
 
 function camera({ x, y, z }) {
-  return { x, y, z: z % 2 };
+  return { x, y, z: z + 1 };
 }
 
 function project({ x, y, z }) {
   // Focal length of the camera.
   const g = 0.1;
-  // The return is the result of performing the following matrix
-  // multiplication:
-  //  +--      --+ +- -+
-  //  | g 0 0  0 | | x |
-  //  | 0 g 0  0 | | y |
-  //  | 0 0 g -1 | | z |
-  //  | 0 0 1  0 | | 1 |
-  //  +--      --+ +- -+
-  return [x * g, y * g, (z - 1) * g, z];
+  const s = 1.0;
+  const n = 0.1;
+  // Infinite projection.
+  return [x * (g / s), y * g, z - n, z];
 }
 
 const zero = document.timeline.currentTime;
@@ -132,9 +127,9 @@ function render(timestamp) {
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([
-      ...project(camera({ x: 0.8, y: 0.0, z: elapsed * 0.0001 })),
-      ...project(camera({ x: 0.9, y: 0.2, z: elapsed * 0.0001 })),
-      ...project(camera({ x: 1.0, y: 0.0, z: elapsed * 0.0001 })),
+      ...project(camera({ x: 0.8, y: 0.0, z: 0.2 + elapsed * 0.0001 - 1 })),
+      ...project(camera({ x: 0.9, y: 0.2, z: 0.2 + elapsed * 0.0001 - 1 })),
+      ...project(camera({ x: 1.0, y: 0.0, z: 0.2 + elapsed * 0.0001 - 1 })),
     ]),
     gl.STATIC_DRAW,
   );
@@ -155,9 +150,9 @@ function render(timestamp) {
   gl.bufferData(
     gl.ARRAY_BUFFER,
     new Float32Array([
-      ...project(camera({ x: 0.8, y: 0.0, z: elapsed * 0.0009 })),
-      ...project(camera({ x: 0.9, y: 0.2, z: elapsed * 0.0009 })),
-      ...project(camera({ x: 1.0, y: 0.0, z: elapsed * 0.0009 })),
+      ...project(camera({ x: 0.8, y: 0.0, z: elapsed * 0.0005 - 1 })),
+      ...project(camera({ x: 0.9, y: 0.2, z: elapsed * 0.0005 - 1 })),
+      ...project(camera({ x: 1.0, y: 0.0, z: elapsed * 0.0005 - 1 })),
     ]),
     gl.STATIC_DRAW,
   );
