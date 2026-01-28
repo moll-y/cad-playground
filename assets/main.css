@@ -1,7 +1,8 @@
 h1,
 h2,
 h3,
-p {
+p,
+a {
   font-family: "Lucida Console", "Courier New", monospace;
   text-align: justify;
   margin: 0;
@@ -22,7 +23,7 @@ h3 {
 }
 
 p {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 body {
@@ -36,7 +37,12 @@ main {
 }
 
 ul {
-  margin: 0;
+  margin: 1rem 0;
+}
+
+li {
+  font-size: 14px;
+  padding-bottom: 0.5rem;
 }
 
 canvas {
