@@ -1,212 +1,72 @@
+// This is just to prove how tedious it is to do everything manually without
+// using the Scene Graph data structure. In the next section I'll try to
+// implement the scene Graph.
 import { mat4 } from "gl-matrix";
 
-const MAX_FPS = 60;
-const FRAME_INTERVAL_MS = 1000 / MAX_FPS;
-
-class Camera {
-  constructor() {
-    this.position = { x: 0, y: 0 };
-    this.angle = 0;
-    this.zoom = 1;
-
-    this.worldMatrix = mat4.create();
-    this.viewMatrix = mat4.create();
-
-    this.update();
-  }
-
-  setPosition(x, y) {
-    this.position.x = x;
-    this.position.y = y;
-
-    this.update();
-  }
-
-  move(dx, dy) {
-    this.position.x += dx;
-    this.position.y += dy;
-
-    this.update();
-  }
-
-  rotate(delta) {
-    this.angle += delta;
-
-    this.update();
-  }
-
-  setZoom(zoom) {
-    this.zoom = zoom;
-
-    this.update();
-  }
-
-  update() {
-    mat4.identity(this.worldMatrix);
-
-    mat4.translate(this.worldMatrix, this.worldMatrix, [
-      this.position.x,
-      this.position.y,
-      0,
-    ]);
-
-    mat4.rotateZ(this.worldMatrix, this.worldMatrix, this.angle);
-
-    mat4.scale(this.worldMatrix, this.worldMatrix, [
-      1 / this.zoom,
-      1 / this.zoom,
-      1,
-    ]);
-    // Why invert before scaling?
-    mat4.invert(this.viewMatrix, this.worldMatrix);
-  }
-}
-
-class SceneNode {
-  constructor(shape = null) {
-    this.shape = shape;
-    this.parent = null;
-    this.children = [];
-
-    this.position = { x: 0, y: 0 };
-    this.angle = 0;
-    this.scale = { x: 1, y: 1 };
-
-    this.localMatrix = mat4.create();
-    this.worldMatrix = mat4.create();
-  }
-
-  addChild(child) {
-    if (child.parent) {
-      child.parent.removeChild(child);
-    }
-
-    child.parent = this;
-    this.children.push(child);
-    return child;
-  }
-
-  removeChild(child) {
-    const index = this.children.indexOf(child);
-    if (index !== -1) {
-      this.children.slice(index, 1);
-      child.parent = null;
-    }
-  }
-
-  updateLocalMatrix() {
-    mat4.identity(this.localMatrix);
-
-    mat4.translate(this.localMatrix, this.localMatrix, [
-      this.position.x,
-      this.position.y,
-      0,
-    ]);
-
-    mat4.rotateZ(this.localMatrix, this.localMatrix, this.angle);
-
-    mat4.scale(this.localMatrix, this.localMatrix, [
-      this.scale.x,
-      this.scale.y,
-      1,
-    ]);
-  }
-
-  updateWorldMatrix(parentWorldMatrix = null) {
-    this.updateLocalMatrix();
-    if (parentWorldMatrix) {
-      mat4.multiply(this.worldMatrix, parentWorldMatrix, this.localMatrix);
-    } else {
-      mat4.copy(this.worldMatrix, this.localMatrix);
-    }
-    for (const child of this.children) {
-      child.updateWorldMatrix(this.worldMatrix);
-    }
-  }
-
-  render(pass) {
-    if (this.shape) {
-      this.shape.setModelMatrix(this.worldMatrix);
-      this.shape.upload();
-      this.shape.render(pass);
-    }
-
-    for (const child of this.children) {
-      child.render(pass);
-    }
-  }
-}
-
 class Square {
-  constructor(device, bindGroupLayout, rgba = [1, 0, 0, 1]) {
-    const size = 50;
+  constructor({ device, pipeline, size, rgb }) {
     const half = size / 2;
-
-    this.device = device;
-    this.model = mat4.create();
-    this.rgba = new Float32Array(rgba);
-
+    // These vertices correspond to a Square.
     this.vertices = new Float32Array([
-      -half,
-      -half,
-      half,
-      -half,
-      -half,
-      half,
-      half,
-      half,
+      ...[-half, -half],
+      ...rgb,
+      ...[half, -half],
+      ...rgb,
+      ...[-half, half],
+      ...rgb,
+      ...[half, half],
+      ...rgb,
     ]);
-    this.indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
-    this.objectData = new Float32Array(20);
-    this.indexCount = this.indices.length;
-
-    this.vertexBuffer = device.createBuffer({
+    this.vertex_buffer = device.createBuffer({
       size: this.vertices.byteLength,
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
 
-    this.indexBuffer = device.createBuffer({
+    this.indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
+    this.index_buffer = device.createBuffer({
       size: this.indices.byteLength,
       usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
     });
 
-    this.objectBuffer = device.createBuffer({
-      size: this.objectData.byteLength,
+    this.position = { x: 0, y: 0 };
+    this.local_matrix = mat4.create();
+    this.world_matrix = mat4.create();
+
+    this.model_buffer = device.createBuffer({
+      size: 16 * 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
-
-    this.bindGroup = device.createBindGroup({
-      layout: bindGroupLayout,
+    this.bind_group = device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(1),
       entries: [
         {
           binding: 0,
-          resource: { buffer: this.objectBuffer },
+          resource: {
+            buffer: this.model_buffer,
+          },
         },
       ],
     });
 
-    // Static geometry is uploaded once.
-    device.queue.writeBuffer(this.vertexBuffer, 0, this.vertices);
-    device.queue.writeBuffer(this.indexBuffer, 0, this.indices);
-
-    this.upload();
+    device.queue.writeBuffer(this.vertex_buffer, 0, this.vertices);
+    device.queue.writeBuffer(this.index_buffer, 0, this.indices);
   }
 
-  setModelMatrix(matrix) {
-    mat4.copy(this.model, matrix);
+  setLocalMatrix(matrix) {
+    mat4.copy(this.local_matrix, matrix);
   }
 
-  upload() {
-    this.objectData.set(this.model, 0);
-    this.objectData.set(this.rgba, 16);
-
-    this.device.queue.writeBuffer(this.objectBuffer, 0, this.objectData);
+  move(x, y) {
+    this.position.x += x;
+    this.position.y += y;
+    mat4.translate(this.local_matrix, this.local_matrix, [x, y, 0]);
   }
+
   render(pass) {
-    pass.setVertexBuffer(0, this.vertexBuffer);
-    pass.setIndexBuffer(this.indexBuffer, "uint16");
-    pass.setBindGroup(1, this.bindGroup);
-    pass.drawIndexed(this.indexCount);
+    pass.setBindGroup(1, this.bind_group);
+    pass.setVertexBuffer(0, this.vertex_buffer);
+    pass.setIndexBuffer(this.index_buffer, "uint16");
+    pass.drawIndexed(this.indices.length);
   }
 }
 
@@ -227,7 +87,7 @@ async function start() {
 
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) {
-    throw new Error("This browser supportts WebGPU but it appears disabled.");
+    throw new Error("This browser supports WebGPU but it appears disabled.");
   }
 
   const device = await adapter.requestDevice();
@@ -237,7 +97,6 @@ async function start() {
       start();
     }
   });
-
   main(canvas, context, device);
 }
 
@@ -247,38 +106,30 @@ function main(canvas, context, device) {
 
   const module = device.createShaderModule({
     code: `
-    struct Object {
-      model: mat4x4<f32>,
-      color: vec4f,
-    }
-
-    struct VertexOut {
-      @builtin(position) position: vec4f,
-      @location(0) color: vec4f,
-    }
-
     @group(0) @binding(0)
     var<uniform> projection: mat4x4<f32>;
 
-    @group(0) @binding(1)
-    var<uniform> view: mat4x4<f32>;
-
     @group(1) @binding(0)
-    var<uniform> object: Object;
+    var<uniform> model: mat4x4<f32>;
+
+    struct VertexOutput {
+      @builtin(position) position: vec4f,
+      @location(0) rgba: vec4f,
+    }
 
     @vertex
-    fn vs(@location(0) position: vec2f) -> VertexOut {
-      var out: VertexOut;
+    fn vs(@location(0) position: vec2f, @location(1) rgb: vec3f) -> VertexOutput {
+      var out: VertexOutput;
 
-      out.position = projection * view * object.model * vec4f(position, 0.0, 1.0);
-      out.color = object.color;
+      out.position = projection * model * vec4f(position.xy, 0.0, 1.0);
+      out.rgba = vec4f(rgb.xyz, 1.0);
 
       return out;
     }
 
     @fragment
-    fn fs(in: VertexOut) -> @location(0) vec4f {
-      return in.color;
+    fn fs(in: VertexOutput) -> @location(0) vec4f {
+      return in.rgba;
     }
     `,
   });
@@ -291,12 +142,17 @@ function main(canvas, context, device) {
       module,
       buffers: [
         {
-          arrayStride: 2 * 4,
+          arrayStride: 5 * 4,
           attributes: [
             {
               shaderLocation: 0,
               offset: 0,
               format: "float32x2",
+            },
+            {
+              shaderLocation: 1,
+              offset: 2 * 4,
+              format: "float32x3",
             },
           ],
         },
@@ -308,212 +164,126 @@ function main(canvas, context, device) {
     },
   });
 
-  const renderPassDescriptor = {
+  const render_pass_descriptor = {
     colorAttachments: [
       {
-        // view: <- to be filled out when we render
+        view: null,
         loadOp: "clear",
         storeOp: "store",
       },
     ],
   };
 
-  const uniformBufferProjection = device.createBuffer({
+  const projection_buffer = device.createBuffer({
     size: 16 * 4,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
 
-  device.queue.writeBuffer(
-    uniformBufferProjection,
-    0,
-    new Float32Array([
-      // Column 0
-      2 / canvas.width,
-      0,
-      0,
-      0,
-
-      // Column 1
-      0,
-      2 / canvas.height,
-      0,
-      0,
-
-      // Column 2
-      0,
-      0,
-      1,
-      0,
-
-      // Column 3: translation
-      -1,
-      -1,
-      0,
-      1,
-    ]),
-  );
-
-  const uniformBufferView = device.createBuffer({
-    size: 16 * 4,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-
-  const bindGroup = device.createBindGroup({
+  const bind_group = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: uniformBufferProjection } },
-      { binding: 1, resource: { buffer: uniformBufferView } },
-    ],
+    entries: [{ binding: 0, resource: { buffer: projection_buffer } }],
   });
 
-  const sunSquare = new Square(
-    device,
-    pipeline.getBindGroupLayout(1),
-    [1, 1, 0, 1],
-  );
+  // Projection matrix.
+  const projection_matrix = mat4.create();
+  mat4.ortho(projection_matrix, 0, canvas.width, 0, canvas.height, -1, 1);
+  device.queue.writeBuffer(projection_buffer, 0, projection_matrix);
 
-  const earthSquare = new Square(
-    device,
-    pipeline.getBindGroupLayout(1),
-    [1, 0, 1, 1],
-  );
+  const sun = new Square({ device, pipeline, size: 100, rgb: [1, 1, 0] });
+  const earth = new Square({ device, pipeline, size: 50, rgb: [0, 0, 1] });
+  const moon = new Square({ device, pipeline, size: 25, rgb: [1, 1, 1] });
 
-  const moonSquare = new Square(
-    device,
-    pipeline.getBindGroupLayout(1),
-    [0, 0, 1, 1],
-  );
+  // Place the Sun at the center of the Canvas.
+  mat4.translate(sun.local_matrix, sun.local_matrix, [
+    canvas.width / 2,
+    canvas.height / 2,
+    0,
+  ]);
+  // The Sun has no parent. Therefore world_matrix = local_matrix
+  mat4.copy(sun.world_matrix, sun.local_matrix);
 
-  const root = new SceneNode();
+  // Move the Earth relative to the Sun's position.
+  mat4.translate(earth.local_matrix, earth.local_matrix, [50, 50, 0]);
+  mat4.multiply(earth.world_matrix, sun.world_matrix, earth.local_matrix);
 
-  const solarSystemNode = new SceneNode();
-  solarSystemNode.position.x = canvas.width / 2;
-  solarSystemNode.position.y = canvas.height / 2;
+  // Move the Moon relative to the Earth's position.
+  mat4.translate(moon.local_matrix, moon.local_matrix, [25, 25, 0]);
+  mat4.multiply(moon.world_matrix, earth.world_matrix, moon.local_matrix);
 
-  const sunNode = new SceneNode(sunSquare);
-  sunNode.scale.x = 2;
-  sunNode.scale.y = 2;
+  function update() {
+    mat4.copy(sun.world_matrix, sun.local_matrix);
+    // Move the Earth relative to the Sun's position.
+    mat4.multiply(earth.world_matrix, sun.world_matrix, earth.local_matrix);
+    // Move the Moon relative to the Earth's position.
+    mat4.multiply(moon.world_matrix, earth.world_matrix, moon.local_matrix);
+  }
 
-  const earthOrbitNode = new SceneNode();
-
-  const earthNode = new SceneNode(earthSquare);
-  earthNode.position.x = 120;
-  earthNode.position.y = 0;
-  earthNode.scale.x = 0.6;
-  earthNode.scale.y = 0.6;
-
-  const moonOrbitNode = new SceneNode();
-
-  const moonNode = new SceneNode(moonSquare);
-  moonNode.position.x = 50;
-  moonNode.position.y = 0;
-  moonNode.scale.x = 0.5;
-  moonNode.scale.y = 0.5;
-
-  root.addChild(solarSystemNode);
-
-  solarSystemNode.addChild(sunNode);
-  solarSystemNode.addChild(earthOrbitNode);
-
-  earthOrbitNode.addChild(earthNode);
-
-  earthNode.addChild(moonOrbitNode);
-  moonOrbitNode.addChild(moonNode);
-
+  // Handle Input
   const pressedKeys = new Set();
   const isKeyDown = (key) => pressedKeys.has(key);
   document.addEventListener("keydown", (e) => pressedKeys.add(e.key));
   document.addEventListener("keyup", (e) => pressedKeys.delete(e.key));
 
-  function updatePhysics() {
-    sunNode.angle += 0.02;
-
-    earthOrbitNode.angle += 0.01;
-    moonOrbitNode.angle += 0.06;
-
-    earthNode.angle += 0.02;
-    moonNode.angle += 0.04;
-
-    if (isKeyDown("ArrowLeft")) {
-      solarSystemNode.position.x -= 4;
-    }
-
-    if (isKeyDown("ArrowRight")) {
-      solarSystemNode.position.x += 4;
-    }
-
-    if (isKeyDown("ArrowUp")) {
-      solarSystemNode.position.y += 4;
-    }
-
-    if (isKeyDown("ArrowDown")) {
-      solarSystemNode.position.y -= 4;
-    }
-
-    if (isKeyDown("a")) {
-      camera.move(-2, 0);
-    }
-
-    if (isKeyDown("d")) {
-      camera.move(2, 0);
-    }
-
-    if (isKeyDown("w")) {
-      camera.move(0, 2);
-    }
-
-    if (isKeyDown("s")) {
-      camera.move(0, -2);
-    }
-    if (isKeyDown("q")) {
-      camera.setZoom(camera.zoom + 0.01);
-    }
-
-    if (isKeyDown("e")) {
-      camera.setZoom(camera.zoom - 0.01);
-    }
-  }
-
-  const camera = new Camera();
-  function render() {
-    // Why write the buffer inside the render function?
-    device.queue.writeBuffer(uniformBufferView, 0, camera.viewMatrix);
-
-    renderPassDescriptor.colorAttachments[0].view = context
-      .getCurrentTexture()
-      .createView();
-
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass(renderPassDescriptor);
-
-    pass.setPipeline(pipeline);
-    pass.setBindGroup(0, bindGroup);
-
-    root.updateWorldMatrix();
-    root.render(pass);
-
-    pass.end();
-
-    const commandBuffer = encoder.finish();
-    device.queue.submit([commandBuffer]);
-  }
-
+  const MAX_FPS = 60;
+  const FRAME_INTERVAL_MS = 1000 / MAX_FPS;
   let previousTimeMs = 60;
-  function update() {
+
+  function render() {
     requestAnimationFrame((currentTimeMs) => {
       const deltaTimeMs = currentTimeMs - previousTimeMs;
 
       if (deltaTimeMs >= FRAME_INTERVAL_MS) {
-        updatePhysics();
+        if (isKeyDown("ArrowLeft")) {
+          sun.move(-4, 0);
+          update();
+        }
+
+        if (isKeyDown("ArrowRight")) {
+          sun.move(+4, 0);
+          update();
+        }
+
+        if (isKeyDown("ArrowUp")) {
+          sun.move(0, +4);
+          update();
+        }
+
+        if (isKeyDown("ArrowDown")) {
+          sun.move(0, -4);
+          update();
+        }
+
         previousTimeMs = currentTimeMs - (deltaTimeMs % FRAME_INTERVAL_MS);
       }
 
+      render_pass_descriptor.colorAttachments[0].view = context
+        .getCurrentTexture()
+        .createView();
+
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass(render_pass_descriptor);
+
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bind_group);
+
+      device.queue.writeBuffer(sun.model_buffer, 0, sun.world_matrix);
+      device.queue.writeBuffer(earth.model_buffer, 0, earth.world_matrix);
+      device.queue.writeBuffer(moon.model_buffer, 0, moon.world_matrix);
+
+      sun.render(pass);
+      earth.render(pass);
+      moon.render(pass);
+
+      pass.end();
+
+      const command_buffer = encoder.finish();
+      device.queue.submit([command_buffer]);
+
       render();
-      update();
     });
   }
 
-  update();
+  render();
 }
 
 start();
