@@ -4,12 +4,18 @@ class Camera {
   constructor({ width, height }) {
     this.position = { x: 0, y: 0 };
     this.view_matrix = mat4.create();
-    this.projection_matrix = mat4.create();
-    this.view_projection_matrix = mat4.create();
+    this.projection_matrix = mat4.ortho(
+      mat4.create(),
+      0,
+      width,
+      0,
+      height,
+      -1,
+      1,
+    );
 
-    mat4.ortho(this.projection_matrix, 0, width, 0, height, -1, 1);
-    mat4.multiply(
-      this.view_projection_matrix,
+    this.projection_view_matrix = mat4.multiply(
+      mat4.create(),
       this.projection_matrix,
       this.view_matrix,
     );
@@ -17,6 +23,7 @@ class Camera {
 
   update_view_matrix() {
     mat4.identity(this.view_matrix);
+
     mat4.translate(this.view_matrix, this.view_matrix, [
       this.position.x,
       this.position.y,
@@ -26,7 +33,7 @@ class Camera {
     mat4.invert(this.view_matrix, this.view_matrix);
 
     mat4.multiply(
-      this.view_projection_matrix,
+      this.projection_view_matrix,
       this.projection_matrix,
       this.view_matrix,
     );
@@ -227,59 +234,56 @@ function main(canvas, context, device) {
   device.queue.writeBuffer(
     projection_view_buffer,
     0,
-    camera.view_projection_matrix,
+    camera.projection_view_matrix,
   );
-
-  let start_position = vec2.create();
-  let start_camera_x = camera.position.x;
-  let start_camera_y = camera.position.y;
-  let view_projection_matrix = mat4.create();
-
-  canvas.addEventListener("mousedown", (event) => {
-    event.preventDefault();
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-
-    mat4.invert(view_projection_matrix, camera.view_projection_matrix);
-
-    start_camera_x = camera.position.x;
-    start_camera_y = camera.position.y;
-
-    start_position = vec2.transformMat4(
-      vec2.create(),
-      clip_space_to_world_space(event),
-      view_projection_matrix,
-    );
-  });
-
-  function handleMouseMove(event) {
-    const end_position = vec2.transformMat4(
-      vec2.create(),
-      clip_space_to_world_space(event),
-      view_projection_matrix,
-    );
-
-    camera.position.x = start_camera_x + (start_position[0] - end_position[0]);
-    camera.position.y = start_camera_y + (start_position[1] - end_position[1]);
-  }
-
-  function handleMouseUp(_) {
-    window.removeEventListener("mousemove", handleMouseMove);
-    window.removeEventListener("mouseup", handleMouseUp);
-  }
-
-  function clip_space_to_world_space(event) {
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const clip_x = (x / canvas.width) * 2 - 1;
-    const clip_y = -(y / canvas.height) * 2 + 1;
-    return vec2.fromValues(clip_x, clip_y);
-  }
 
   const square = new Square({ device, pipeline, size: 100, rgb: [1, 1, 0] });
   square.position.x = canvas.width / 2;
   square.position.y = canvas.height / 2;
+
+  let inverted_projection_view = mat4.create();
+  let start_camera = { ...camera.position };
+  let start_position = [0, 0];
+
+  canvas.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    window.addEventListener("mousemove", handle_mouse_move);
+    window.addEventListener("mouseup", handle_mouse_up);
+
+    mat4.invert(inverted_projection_view, camera.projection_view_matrix);
+    start_position = clip_to_world(event);
+    start_camera = { ...camera.position };
+  });
+
+  function handle_mouse_move(event) {
+    event.preventDefault();
+
+    let end_position = clip_to_world(event);
+    camera.position.x = start_camera.x + start_position[0] - end_position[0];
+    camera.position.y = start_camera.y + start_position[1] - end_position[1];
+  }
+
+  function handle_mouse_up(event) {
+    event.preventDefault();
+    window.removeEventListener("mousemove", handle_mouse_move);
+    window.removeEventListener("mouseup", handle_mouse_up);
+  }
+
+  function clip_to_world(event) {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    //  clip = projection * view * world
+    //  world = inverse(projection * view) * clip
+    return [
+      ...vec2.transformMat4(
+        vec2.create(),
+        [(x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1],
+        inverted_projection_view,
+      ),
+    ];
+  }
 
   // Handle Input
   const pressed_keys = new Set();
@@ -329,9 +333,8 @@ function main(canvas, context, device) {
       device.queue.writeBuffer(
         projection_view_buffer,
         0,
-        camera.view_projection_matrix,
+        camera.projection_view_matrix,
       );
-
       square.update_world_matrix();
       square.render({ device, pass });
 
