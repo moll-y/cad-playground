@@ -1,4 +1,5 @@
 import { mat4, vec2 } from "gl-matrix";
+import BezierEasing from "bezier-easing";
 
 class Camera {
   constructor({ width, height }) {
@@ -237,9 +238,13 @@ function main(canvas, context, device) {
     camera.projection_view_matrix,
   );
 
-  const square = new Square({ device, pipeline, size: 100, rgb: [1, 1, 0] });
-  square.position.x = canvas.width / 2;
-  square.position.y = canvas.height / 2;
+  const a = new Square({ device, pipeline, size: 100, rgb: [1, 1, 0] });
+  a.position.x = canvas.width / 2;
+  a.position.y = canvas.height / 2;
+
+  const b = new Square({ device, pipeline, size: 50, rgb: [1, 0, 0] });
+  b.position.x = 600;
+  b.position.y = 600;
 
   let inverted_projection_view = mat4.create();
   let start_camera = { ...camera.position };
@@ -257,6 +262,7 @@ function main(canvas, context, device) {
 
   function handle_mouse_move(event) {
     event.preventDefault();
+    cancelAnimationFrame(animationId);
 
     let end_position = clip_to_world(event);
     camera.position.x = start_camera.x + start_position[0] - end_position[0];
@@ -335,8 +341,10 @@ function main(canvas, context, device) {
         0,
         camera.projection_view_matrix,
       );
-      square.update_world_matrix();
-      square.render({ device, pass });
+      a.update_world_matrix();
+      a.render({ device, pass });
+      b.update_world_matrix();
+      b.render({ device, pass });
 
       pass.end();
 
@@ -348,6 +356,52 @@ function main(canvas, context, device) {
   }
 
   render();
+
+  let animationId = null;
+  const main = document.querySelector("main");
+
+  for (let i = 0; i < 5; i++) {
+    const button = document.createElement("button");
+    button.textContent = `Landmark ${i + 1}`;
+    button.addEventListener("click", () => {
+      // Animations API
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      const zero = document.timeline.currentTime;
+      const duration = 1000;
+      const linear = BezierEasing(0, 0, 1, 1);
+      const target_position = [(i + 1) * 100, (i + 1) * 100];
+
+      function step(timestamp) {
+        if (start === undefined) {
+          start = timestamp;
+        }
+
+        const elapsed = timestamp - zero;
+        const t = linear(elapsed / duration);
+        const position = vec2.lerp(
+          vec2.create(),
+          [camera.position.x, camera.position.y],
+          target_position,
+          t,
+        );
+
+        camera.position = { x: position[0], y: position[1] };
+
+        if (elapsed > duration) {
+          console.log("finish");
+          return;
+        }
+
+        animationId = requestAnimationFrame(step);
+      }
+
+      animationId = requestAnimationFrame(step);
+    });
+
+    main.appendChild(button);
+  }
 }
 
 start();
