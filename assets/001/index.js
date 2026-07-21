@@ -5,8 +5,9 @@ class SceneGraph {
     this.parent = null;
     this.shape = shape;
     this.children = [];
+    this.angle = 0;
     this.position = { x: 0, y: 0 };
-    this.world_matrix = mat4.create();
+    this.model_matrix = mat4.create();
     this.local_matrix = mat4.create();
     this.model_buffer = device.createBuffer({
       size: 16 * 4,
@@ -43,25 +44,26 @@ class SceneGraph {
       this.position.y,
       0,
     ]);
+    mat4.rotateZ(this.local_matrix, this.local_matrix, this.angle);
   }
 
-  update_world_matrix(parent_world_matrix = null) {
+  update_model_matrix(parent_model_matrix = null) {
     this.update_local_matrix();
 
-    if (parent_world_matrix) {
-      mat4.multiply(this.world_matrix, parent_world_matrix, this.local_matrix);
+    if (parent_model_matrix) {
+      mat4.multiply(this.model_matrix, parent_model_matrix, this.local_matrix);
     } else {
-      mat4.copy(this.world_matrix, this.local_matrix);
+      mat4.copy(this.model_matrix, this.local_matrix);
     }
 
     for (const child of this.children) {
-      child.update_world_matrix(this.world_matrix);
+      child.update_model_matrix(this.model_matrix);
     }
   }
 
   render({ pass, device }) {
     if (this.shape) {
-      device.queue.writeBuffer(this.model_buffer, 0, this.world_matrix);
+      device.queue.writeBuffer(this.model_buffer, 0, this.model_matrix);
       pass.setBindGroup(1, this.bind_group);
       this.shape.render(pass);
     }
@@ -229,54 +231,57 @@ function main(canvas, context, device) {
   const earth = new Square({ device, size: 50, rgb: [0, 0, 1] });
   const moon = new Square({ device, size: 25, rgb: [1, 1, 1] });
 
+  const scene_node = new SceneGraph({ device, pipeline });
   const sun_node = new SceneGraph({ device, pipeline, shape: sun });
+
+  const earth_orbit_node = new SceneGraph({ device, pipeline });
   const earth_node = new SceneGraph({ device, pipeline, shape: earth });
+
+  const moon_orbit_node = new SceneGraph({ device, pipeline });
   const moon_node = new SceneGraph({ device, pipeline, shape: moon });
 
-  sun_node.position.x = canvas.width / 2;
-  sun_node.position.y = canvas.height / 2;
+  scene_node.add_child(sun_node);
+  sun_node.add_child(earth_orbit_node);
+  earth_orbit_node.add_child(earth_node);
+  earth_node.add_child(moon_orbit_node);
+  moon_orbit_node.add_child(moon_node);
 
-  earth_node.position.x = 50;
-  earth_node.position.y = 50;
+  scene_node.position.x = canvas.width / 2;
+  scene_node.position.y = canvas.height / 2;
 
-  moon_node.position.x = 25;
-  moon_node.position.y = 25;
+  sun_node.position.x = 0;
+  sun_node.position.y = 0;
 
-  sun_node.add_child(earth_node);
-  earth_node.add_child(moon_node);
+  earth_orbit_node.position.x = 0;
+  earth_orbit_node.position.y = 0;
+  earth_node.position.x = 100;
+  earth_node.position.y = 100;
 
-  // Handle Input
-  const pressedKeys = new Set();
-  const isKeyDown = (key) => pressedKeys.has(key);
-  document.addEventListener("keydown", (e) => pressedKeys.add(e.key));
-  document.addEventListener("keyup", (e) => pressedKeys.delete(e.key));
+  moon_orbit_node.position.x = 0;
+  moon_orbit_node.position.y = 0;
+  moon_node.position.x = 50;
+  moon_node.position.y = 50;
 
   const MAX_FPS = 60;
   const FRAME_INTERVAL_MS = 1000 / MAX_FPS;
-  let previousTimeMs = 60;
+  let previous_time_ms = 60;
 
   function render() {
-    requestAnimationFrame((currentTimeMs) => {
-      const deltaTimeMs = currentTimeMs - previousTimeMs;
+    requestAnimationFrame((current_time_ms) => {
+      const delta_time_ms = current_time_ms - previous_time_ms;
 
-      if (deltaTimeMs >= FRAME_INTERVAL_MS) {
-        if (isKeyDown("ArrowLeft")) {
-          sun_node.position.x -= 4;
-        }
+      if (delta_time_ms >= FRAME_INTERVAL_MS) {
+        scene_node.position.x = (scene_node.position.x + 1) % canvas.width;
+        scene_node.position.y = (scene_node.position.y + 1) % canvas.height;
 
-        if (isKeyDown("ArrowRight")) {
-          sun_node.position.x += 4;
-        }
+        sun_node.angle += 0.01;
+        earth_orbit_node.angle += 0.05;
+        earth_node.angle += 0.02;
+        moon_orbit_node.angle += 0.05;
+        moon_node.angle += 0.08;
 
-        if (isKeyDown("ArrowUp")) {
-          sun_node.position.y += 4;
-        }
-
-        if (isKeyDown("ArrowDown")) {
-          sun_node.position.y -= 4;
-        }
-
-        previousTimeMs = currentTimeMs - (deltaTimeMs % FRAME_INTERVAL_MS);
+        previous_time_ms =
+          current_time_ms - (delta_time_ms % FRAME_INTERVAL_MS);
       }
 
       render_pass_descriptor.colorAttachments[0].view = context
@@ -289,8 +294,8 @@ function main(canvas, context, device) {
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, bind_group);
 
-      sun_node.update_world_matrix();
-      sun_node.render({ pass, device });
+      scene_node.update_model_matrix();
+      scene_node.render({ pass, device });
 
       pass.end();
 

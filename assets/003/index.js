@@ -1,8 +1,8 @@
 import { mat4, vec2 } from "gl-matrix";
+import BezierEasing from "bezier-easing";
 
 class Camera {
   constructor({ width, height }) {
-    this.zoom = 1;
     this.position = { x: 0, y: 0 };
     this.view_matrix = mat4.create();
     this.projection_matrix = mat4.ortho(
@@ -29,12 +29,6 @@ class Camera {
       this.position.x,
       this.position.y,
       0,
-    ]);
-
-    mat4.scale(this.view_matrix, this.view_matrix, [
-      1 / this.zoom,
-      1 / this.zoom,
-      1,
     ]);
 
     mat4.invert(this.view_matrix, this.view_matrix);
@@ -272,6 +266,7 @@ function main(canvas, context, device) {
     event.preventDefault();
     window.addEventListener("mousemove", handle_mouse_move);
     window.addEventListener("mouseup", handle_mouse_up);
+
     mat4.invert(inverted_projection_view, camera.projection_view_matrix);
     start_position = clip_to_world(event);
     start_camera = { ...camera.position };
@@ -279,6 +274,8 @@ function main(canvas, context, device) {
 
   function handle_mouse_move(event) {
     event.preventDefault();
+    cancelAnimationFrame(animationId);
+
     let end_position = clip_to_world(event);
     camera.position.x = start_camera.x + start_position[0] - end_position[0];
     camera.position.y = start_camera.y + start_position[1] - end_position[1];
@@ -306,27 +303,6 @@ function main(canvas, context, device) {
     ];
   }
 
-  canvas.addEventListener("wheel", (event) => {
-    event.preventDefault();
-    mat4.invert(inverted_projection_view, camera.projection_view_matrix);
-    start_position = clip_to_world(event);
-
-    const MIN_ZOOM = 0.02;
-    const MAX_ZOOM = 50;
-
-    const direction = Math.sign(event.deltaY);
-    const new_zoom = camera.zoom - direction * 0.1;
-
-    camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, new_zoom));
-    camera.update_view_matrix();
-
-    mat4.invert(inverted_projection_view, camera.projection_view_matrix);
-    const end_position = clip_to_world(event);
-
-    camera.position.x += start_position[0] - end_position[0];
-    camera.position.y += start_position[1] - end_position[1];
-  });
-
   // Handle Input
   const pressed_keys = new Set();
   const is_key_down = (key) => pressed_keys.has(key);
@@ -338,8 +314,8 @@ function main(canvas, context, device) {
   let previous_time_ms = 60;
 
   function render() {
-    requestAnimationFrame((current_time_ms) => {
-      const delta_time_ms = current_time_ms - previous_time_ms;
+    requestAnimationFrame((current_times_ms) => {
+      const delta_time_ms = current_times_ms - previous_time_ms;
 
       if (delta_time_ms >= FRAME_INTERVAL_MS) {
         if (is_key_down("ArrowLeft")) {
@@ -358,16 +334,8 @@ function main(canvas, context, device) {
           camera.position.y -= 4;
         }
 
-        if (is_key_down("+")) {
-          camera.zoom += 0.1;
-        }
-
-        if (is_key_down("-")) {
-          camera.zoom -= 0.1;
-        }
-
         previous_time_ms =
-          current_time_ms - (delta_time_ms % FRAME_INTERVAL_MS);
+          current_times_ms - (delta_time_ms % FRAME_INTERVAL_MS);
       }
 
       render_pass_descriptor.colorAttachments[0].view = context
@@ -408,6 +376,63 @@ function main(canvas, context, device) {
   }
 
   render();
+
+  let animationId = null;
+  const main = document.querySelector("main");
+  const ol = document.createElement("ol");
+  main.appendChild(ol);
+
+  [
+    [0, 0],
+    [-100, +100],
+    [-100, -100],
+    [+100, -100],
+    [+100, +100],
+  ].forEach(([target_x, target_y], i) => {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+
+    li.append(button);
+    ol.appendChild(li);
+
+    button.textContent = `Landmark ${i + 1}`;
+    button.addEventListener("click", () => {
+      // Animations API
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+      const zero = document.timeline.currentTime;
+      const duration = 1000;
+      const linear = BezierEasing(0, 0, 1, 1);
+      const target_position = [target_x, target_y];
+
+      function step(timestamp) {
+        if (start === undefined) {
+          start = timestamp;
+        }
+
+        const elapsed = timestamp - zero;
+        const t = linear(elapsed / duration);
+        const position = vec2.lerp(
+          vec2.create(),
+          [camera.position.x, camera.position.y],
+          target_position,
+          t,
+        );
+
+        camera.position = { x: position[0], y: position[1] };
+
+        if (elapsed > duration) {
+          console.log("finish");
+          return;
+        }
+
+        animationId = requestAnimationFrame(step);
+      }
+
+      animationId = requestAnimationFrame(step);
+    });
+  });
 }
 
 start();
