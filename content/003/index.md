@@ -1,5 +1,5 @@
 +++
-title = '002 - Camera Translation and Zooming'
+title = '003 - Camera Animations'
 +++
 
 ### Theory

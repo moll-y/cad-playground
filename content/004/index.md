@@ -1,5 +1,5 @@
 +++
-title = '004 - Circle and Grid'
+title = '004 - Circle (SDF) and Grid (Procedural Pattern Generation)'
 +++
 
 ### Theory
